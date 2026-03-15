@@ -30,3 +30,21 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+  # ── Optional TLS termination via Caddy ──────────────────────
+  # Uncomment and set DOMAIN= to get automatic Let's Encrypt TLS
+  #
+  # caddy:
+  #   image: caddy:2-alpine
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   depends_on: [frontend, backend]
+
+# volumes:
+#   caddy_data:
+#   caddy_config:

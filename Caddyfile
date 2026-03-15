@@ -1,0 +1,29 @@
+# Caddyfile — automatic TLS via Let's Encrypt.
+# Set DOMAIN environment variable, then: docker compose up
+#
+# Usage:
+#   DOMAIN=saa.example.com docker compose up
+
+{$DOMAIN:localhost} {
+    # Frontend
+    handle /* {
+        reverse_proxy frontend:80
+    }
+
+    # Backend API
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Security headers (in addition to nginx inner headers)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' unpkg.com cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' unpkg.com; img-src 'self' data: *.tile.openstreetmap.org *.basemaps.cartocdn.com; connect-src 'self'"
+        -Server
+    }
+
+    encode gzip
+    log
+}

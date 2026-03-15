@@ -11,6 +11,8 @@ export class TimeAnimator {
   /**
    * @param {(frame: Frame, index: number, total: number) => void} onFrame
    *   Called for each animation step with the current frame.
+   *   Dispatch is batched via requestAnimationFrame so the map renderer
+   *   always updates on a vsync boundary — no jank on large datasets.
    */
   constructor(onFrame) {
     this._onFrame  = onFrame;
@@ -18,6 +20,7 @@ export class TimeAnimator {
     this._frames   = [];
     this._index    = 0;
     this._timer    = null;
+    this._rafId    = null;
     this._speed    = 500;    // ms per step
     this._playing  = false;
   }
@@ -98,7 +101,13 @@ export class TimeAnimator {
 
   _dispatch() {
     const frame = this._frames[this._index];
-    if (frame) this._onFrame(frame, this._index, this._frames.length);
+    if (!frame) return;
+    // Schedule on next vsync for smooth rendering
+    if (this._rafId != null) cancelAnimationFrame(this._rafId);
+    this._rafId = requestAnimationFrame(() => {
+      this._rafId = null;
+      this._onFrame(frame, this._index, this._frames.length);
+    });
   }
 }
 
