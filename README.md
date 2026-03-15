@@ -1,10 +1,8 @@
-# 🌤️ saa-wfs
+# 🌤️ Sää WFS
 
-> **Real-time Finnish weather observations on an interactive map — powered by the FMI open WFS API.**
+> **Live Finnish weather observations on an interactive Leaflet map — powered by the FMI open WFS API.**
 
-Saa-wfs fetches live weather data from the [Finnish Meteorological Institute](https://en.ilmatieteenlaitos.fi/open-data) via their OGC WFS 2.0 endpoint, parses the GML response, and renders an interactive Folium/Leaflet HTML map with temperature-coded station markers and rich popups.
-
-No API key required. Works offline once the HTML is saved.
+Fetches real-time weather data from the Finnish Meteorological Institute via OGC WFS 2.0, serves it through a FastAPI backend, and renders it as a full-screen interactive map with temperature-coded markers, layer switching, bounding-box filtering, and time-series animation.
 
 ---
 
@@ -12,117 +10,117 @@ No API key required. Works offline once the HTML is saved.
 
 | | |
 |---|---|
-| 🛰️ **Live FMI data** | WFS GetFeature stored-query, last N hours |
-| 🗺️ **Interactive map** | Leaflet/Folium, fullscreen, mini-map, layer control |
-| 🌡️ **Temperature colour bands** | Blue → green → orange → red scale |
-| 📊 **Rich popups** | Temp, wind, precipitation, humidity, pressure |
-| 🔁 **Retry & backoff** | Automatic retry on 5xx / rate-limit responses |
-| 🧪 **100 % test coverage** | pytest + responses mock library |
-| 🐍 **Python 3.11+** | Typed, linted, mypy-clean |
+| 🛰️ **Live FMI data** | WFS 2.0 GetFeature stored-query, configurable time window |
+| 🗺️ **Leaflet.js map** | Full-screen interactive map, two base tile sets |
+| 🌡️ **5-band colour scale** | Blue → green → orange → red by temperature |
+| 💨 **Layer switching** | Temperature / wind speed / precipitation layers |
+| 📦 **Marker clustering** | Optional MarkerCluster for dense station sets |
+| 🔲 **Bbox filter** | Draw a rectangle on the map to filter by region |
+| ⏱️ **Time animation** | Slider + play/pause/stop for the last N hours |
+| ⚡ **FastAPI backend** | CORS-enabled proxy with retry/backoff to FMI WFS |
+| 🧪 **100% test coverage** | Vitest (JS) + pytest (Python), all offline mocks |
 
 ---
 
-## 🗺️ Map preview
+## 🗺️ Colour scales
 
-Each station circle is colour-coded by air temperature:
+**Temperature**
 
-| Colour | Temperature |
+| | Band |
 |---|---|
-| 🔵 Dark blue | Below 0 °C (frost) |
-| 🩵 Light blue | 0 – 10 °C (cold) |
-| 🟢 Green | 10 – 20 °C (mild) |
-| 🟠 Orange | 20 – 28 °C (warm) |
-| 🔴 Red | 28 °C and above (hot) |
+| 🔵 Dark blue | Frost (< 0 °C) |
+| 🩵 Light blue | Cold (0 – 10 °C) |
+| 🟢 Green | Mild (10 – 20 °C) |
+| 🟠 Orange | Warm (20 – 28 °C) |
+| 🔴 Red | Hot (≥ 28 °C) |
 | ⚫ Grey | No data |
-
-Click any marker to see a full data popup.
 
 ---
 
 ## 🚀 Quick start
 
+### 1 · Backend
+
 ```bash
-# 1. Clone & install
-git clone <repo-url>
+cd saa_wfs/backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+# API docs: http://localhost:8000/docs
+```
+
+### 2 · Frontend
+
+```bash
+# Option A — Python
+cd saa_wfs/frontend
+python -m http.server 5174
+
+# Option B — Node
 cd saa_wfs
-pip install -e ".[dev]"
-
-# 2. Fetch last hour of observations (all Finland)
-saa-wfs
-
-# 3. Open the map
-start saa_map.html          # Windows
-open  saa_map.html          # macOS
-xdg-open saa_map.html       # Linux
-
-# 4. Auto-open in browser
-saa-wfs --open
-
-# 5. Narrow to a city or bounding box
-saa-wfs --place Helsinki --hours 2
-saa-wfs --bbox 20,59,32,70  --hours 1
+npm install && npm run dev
 ```
 
-**Sample console output:**
-
-```
-Stations: 187  |  Temp range: -12.4 … 8.1 °C
-
-  Map saved → C:\projects\saa_wfs\saa_map.html
-```
+Open **http://localhost:5174** — data loads automatically.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-CLI (main.py)
-     │
-     ├─► FMIWFSClient          HTTP GET with retry/backoff
-     │       └─► WFS API       https://opendata.fmi.fi/wfs
-     │
-     ├─► WFSParser             GML/XML → WeatherObservation dataclasses
-     │       └─► ElementTree   stdlib XML parsing, namespace-aware
-     │
-     └─► WeatherMapBuilder     Folium map construction
-             └─► saa_map.html  Standalone interactive HTML
+Browser
+  └── frontend/index.html
+        └── src/
+              ├── app.js        Orchestrator — wires all modules
+              ├── wfs.js        fetch() calls to FastAPI backend
+              ├── map.js        Leaflet map, markers, popups
+              ├── layers.js     Colour scales, legend builder
+              ├── animation.js  Time-series playback controller
+              └── ui.js         Toast, loading overlay, topbar updates
+
+FastAPI  (localhost:8000)
+  └── backend/
+        ├── main.py        Routes: /api/observations, /api/timeseries
+        ├── wfs_client.py  requests.Session + urllib3 Retry → FMI WFS
+        └── parser.py      GML/XML → WeatherObservation dataclasses
+              └──→ GeoJSON FeatureCollection returned to frontend
 ```
 
 ---
 
-## 🎛️ Full CLI reference
+## 🎛️ Frontend controls
 
-```
-saa-wfs [options]
-
-fetch:
-  --hours N           How many hours back to fetch     [default: 1.0]
-  --place NAME        Finnish place name filter        [default: all Finland]
-  --bbox W,S,E,N      Bounding box WGS-84 lon/lat      [default: none]
-  --parameters LIST   Comma-separated WFS params       [default: t2m,ws_10min,ri_10min,rh,p_sea]
-
-output:
-  --output / -o PATH  Output HTML file                 [default: saa_map.html]
-  --open              Auto-open in browser after save
-  --zoom N            Initial map zoom level           [default: 5]
-
-verbosity:
-  --log-level         DEBUG | INFO | WARNING           [default: INFO]
-```
+| Control | Function |
+|---|---|
+| **Hours slider** | Time window: 1 – 24 hours back |
+| **Place filter** | Finnish place name (e.g. "Helsinki") |
+| **Hae säätiedot** | Fetch and render observations |
+| **Layer toggles** | Switch between temp / wind / precip colouring |
+| **Klusterointi** | Enable/disable marker clustering |
+| **Piirrä alue** | Draw a bounding box on the map to filter |
+| **▶ ⏸ ⏹** | Play / pause / stop time animation |
+| **Time slider** | Manual scrub through time steps |
+| **☰** | Collapse / expand the side panel |
 
 ---
 
-## 🌐 WFS parameters
+## 🌐 API reference
 
-| Parameter | Description | Unit |
-|---|---|---|
-| `t2m` | Air temperature at 2 m | °C |
-| `ws_10min` | Wind speed 10-min average | m/s |
-| `ri_10min` | Precipitation intensity | mm/h |
-| `rh` | Relative humidity | % |
-| `p_sea` | Pressure reduced to sea level | hPa |
+```
+GET /api/observations
+  ?hours=1        # required, 0 < hours ≤ 48
+  &place=Helsinki # optional
+  &bbox=W,S,E,N   # optional, WGS-84
+  &parameters=t2m,ws_10min,ri_10min,rh,p_sea
 
-Add any other FMI parameter to `--parameters` and it will appear in the popup under *extra*.
+→ GeoJSON FeatureCollection + meta.station_count
+
+GET /api/timeseries
+  ?hours=6 &steps=6 &place=… &bbox=…
+
+→ Array<{ timestamp: ISO, geojson: FeatureCollection }>
+
+GET /healthz  → { status: "ok", time: ISO }
+```
 
 ---
 
@@ -130,54 +128,64 @@ Add any other FMI parameter to `--parameters` and it will appear in the popup un
 
 ```
 saa_wfs/
-├── src/saa_wfs/
-│   ├── __init__.py
-│   ├── wfs_client.py    # HTTP fetch, retry, session management
-│   ├── parser.py        # GML/XML → WeatherObservation dataclasses
-│   ├── map_viz.py       # Folium map builder, legend, popups
-│   └── main.py          # CLI entry point
+├── backend/
+│   ├── main.py              FastAPI app + routes
+│   ├── wfs_client.py        FMI WFS HTTP client (retry/backoff)
+│   ├── parser.py            GML/XML parser → WeatherObservation
+│   ├── requirements.txt
+│   └── requirements-dev.txt
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   └── src/
+│       ├── app.js / map.js / wfs.js
+│       ├── layers.js / animation.js / ui.js
 ├── tests/
-│   ├── test_wfs_client.py
-│   ├── test_parser.py
-│   ├── test_map_viz.py
-│   └── test_main.py
-├── pyproject.toml
+│   ├── test_layers.js       Colour-scale unit tests (100% cov)
+│   ├── test_animation.js    TimeAnimator unit tests (100% cov)
+│   ├── test_parser.py       Python GML parser tests
+│   ├── test_wfs_client.py   Python HTTP client tests (mocked)
+│   └── test_main.py         FastAPI endpoint tests
+├── vitest.config.js
+├── package.json
 └── README.md
 ```
 
 ---
 
-## 🧪 Running tests
+## 🧪 Testing
 
 ```bash
-pip install -e ".[dev]"
-pytest                        # all tests + coverage report
-pytest -k test_parser         # single module
-pytest --cov-report=html      # open htmlcov/index.html
+# JavaScript (Vitest)
+npm install
+npm test
+
+# Python (pytest)
+pip install -r backend/requirements-dev.txt
+pytest tests/ -v --cov=backend
 ```
 
-Network calls are fully mocked — the test suite runs offline.
-Coverage is enforced at **100 %**.
+All network calls are mocked — the full suite runs **offline**.
 
 ---
 
-## 📦 Dependencies
+## 🎛️ Osatehtävät (Task breakdown)
 
-| Package | Purpose |
-|---|---|
-| `requests` | HTTP client with retry adapter |
-| `urllib3` | Retry policy primitives |
-| `folium` | Leaflet.js map wrapper |
-
-No third-party XML library — uses Python stdlib `xml.etree.ElementTree`.
+| Osatehtävä | Vaikeus | Status |
+|---|---|---|
+| WFS-rajapinnan peruskyselyiden tekeminen | Aloittelija | ✅ |
+| GeoJSON/GML-datan tulkinta ja käsittely | Keskitaso | ✅ |
+| Karttapohjan näyttäminen ja pisteiden visualisointi (Leaflet.js) | Keskitaso | ✅ |
+| Käyttäjän rajausmahdollisuus ja interaktiiviset layerit | Keskitaso/Taitava | ✅ |
+| Ajallinen visualisointi/animaatio (säätilan muutos) | Taitava | ✅ |
+| Useamman datalähteen yhdistäminen ja UI:n hallinta | Taitava | ✅ |
 
 ---
 
 ## 🔒 Data licence
 
-Weather data © Finnish Meteorological Institute, licensed under
-[Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/).
-See [FMI open data terms](https://en.ilmatieteenlaitos.fi/open-data-licence).
+Weather data © Finnish Meteorological Institute.
+Licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ---
 
