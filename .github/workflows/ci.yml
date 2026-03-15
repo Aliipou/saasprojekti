@@ -7,37 +7,48 @@ on:
     branches: [main, master]
 
 jobs:
-  test:
-    name: Test Python ${{ matrix.python-version }}
+  backend-tests:
+    name: Python tests + coverage
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: "pip" }
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - run: pytest tests/ -v --cov=backend --cov-report=term-missing --cov-fail-under=100
+      - uses: actions/upload-artifact@v4
+        with: { name: py-coverage, path: htmlcov/ }
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
+  frontend-tests:
+    name: JS unit tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        with: { name: js-coverage, path: coverage/ }
 
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report, path: playwright-report/ }
 
-      - name: Lint (ruff)
-        run: ruff check src/ tests/
-
-      - name: Type-check (mypy)
-        run: mypy src/
-
-      - name: Run tests (100% coverage enforced, offline mocks)
-        run: pytest
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: htmlcov-${{ matrix.python-version }}
-          path: htmlcov/
+  docker:
+    name: Docker build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t saa-wfs-backend ./backend

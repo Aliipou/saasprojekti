@@ -8,12 +8,15 @@
     "backend": "uvicorn backend.main:app --reload --port 8000",
     "test":    "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "test:e2e":"playwright test",
     "lint":    "eslint frontend/src tests"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^1.6.0",
-    "vitest":              "^1.6.0",
-    "jsdom":               "^24.1.0",
-    "@vitest/ui":          "^1.6.0"
+    "@vitest/coverage-v8":   "^1.6.0",
+    "vitest":                "^1.6.0",
+    "jsdom":                 "^24.1.0",
+    "@vitest/ui":            "^1.6.0",
+    "@playwright/test":      "^1.44.0",
+    "serve":                 "^14.2.3"
   }
 }
